@@ -4,8 +4,20 @@ export default {
     "./index.html",
     "./src/**/*.{js,jsx}",
   ],
+  darkMode: 'class',
   theme: {
-    extend: {},
+    extend: {
+
+      colors:{
+        cream: '#f1eddc'
+
+
+      },
+
+
+
+
+    },
   },
   plugins: [],
 }

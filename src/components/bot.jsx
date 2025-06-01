@@ -3,17 +3,16 @@ import { motion } from "framer-motion";
 
 const MOVE_SPEED = 0.2; // Pixels per millisecond
 const FRAME_DURATION = 100;
-const STANDING_FRAME = "./src/assets/sprite/standing.png";
+const STANDING_FRAME = "../src/assets/sprite/standing.png";
 const BLINK_FRAME = "./src/assets/sprite/blink.png";
 
 const spriteFrames = [
-  "./src/assets/sprite/standing.png",
-  "./src/assets/sprite/walking2.png",
-  "./src/assets/sprite/walking3.png",
-
-  "./src/assets/sprite/walking4.png",
-  "./src/assets/sprite/walking5.png",
-  "./src/assets/sprite/walking7.png",
+  "../src/assets/sprite/standing.png",
+  "../src/assets/sprite/walking2.png",
+  "../src/assets/sprite/walking3.png",
+  "../src/assets/sprite/walking4.png",
+  "../src/assets/sprite/walking5.png",
+  "../src/assets/sprite/walking7.png",
   
 ];
 

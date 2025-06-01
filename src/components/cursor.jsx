@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import cursorDefault from "../assets/cursor-default.PNG";
-import cursorHover from "../assets/cursor-hover.PNG";
-import cursorClick from "../assets/cursor-click.PNG";
+import cursorDefault from "/public/assets/cursor-default.PNG";
+import cursorHover from "/public/assets/cursor-hover.PNG";
+import cursorClick from "/public/assets/cursor-click.PNG";
 
 export default function CustomCursor() {
   const [position, setPosition] = useState({ x: 0, y: 0 });

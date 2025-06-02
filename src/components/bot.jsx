@@ -1,10 +1,17 @@
 import { useState, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
-const MOVE_SPEED = 0.2; // Pixels per ms
+const MOVE_SPEED = 0.2;
 const FRAME_DURATION = 100;
-const STANDING_FRAME = "/assets/sprite/standing.png";
+
 const BLINK_FRAME = "/assets/sprite/blink.png";
+const DUCK_FRAME = "/assets/sprite/click.png";
+
+const BG_IMAGES = [
+  "/assets/bg1.jpg", // default
+  "/assets/bg2.jpg", // after 40%
+  "/assets/bg1.jpg", // after 80%
+];
 
 const spriteFrames = [
   "/assets/sprite/standing.png",
@@ -14,32 +21,43 @@ const spriteFrames = [
   "/assets/sprite/walking5.png",
   "/assets/sprite/walking7.png",
 ];
+const bgVariants = {
+  enter: (dir) => ({
+    x: dir === "right" ? "100%" : "-100%",
+    opacity: 0,
+  }),
+  center: {
+    x: 0,
+    opacity: 1,
+  },
+  exit: (dir) => ({
+    x: dir === "right" ? "-100%" : "100%",
+    opacity: 0,
+  }),
+};
 
 export default function SpriteSection() {
-  const sectionRef = useRef(null);
-  const [position, setPosition] = useState(100);
-  const [containerWidth, setContainerWidth] = useState(0);
-  const [isMoving, setIsMoving] = useState(false);
-  const [direction, setDirection] = useState("right");
-  const [frameIndex, setFrameIndex] = useState(0);
-  const [hideCursor, setHideCursor] = useState(false);
-
-  const keys = useRef({ left: false, right: false });
+  const containerRef = useRef(null);
   const lastTimeRef = useRef(null);
 
-  // Get container width for clamping
-  useEffect(() => {
-    const updateSize = () => {
-      if (sectionRef.current) {
-        setContainerWidth(sectionRef.current.offsetWidth);
-      }
-    };
-    updateSize();
-    window.addEventListener("resize", updateSize);
-    return () => window.removeEventListener("resize", updateSize);
-  }, []);
+  const keys = useRef({ left: false, right: false });
 
-  // Handle key input
+  const [position, setPosition] = useState(100);
+  const [isMoving, setIsMoving] = useState(false);
+  const [direction, setDirection] = useState("right"); // sprite facing direction
+
+  const [frameIndex, setFrameIndex] = useState(0);
+  const [isDucking, setIsDucking] = useState(false);
+  const duckTimeoutRef = useRef(null);
+  const holdTimeoutRef = useRef(null);
+  const isLongPressRef = useRef(false);
+
+  // Background state: current index, previous index and slide direction
+  const [currentBgIndex, setCurrentBgIndex] = useState(0);
+  const [prevBgIndex, setPrevBgIndex] = useState(0);
+  const [bgDirection, setBgDirection] = useState("right"); // transition direction for bg slider
+
+  // Key handlers
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === "ArrowRight" || e.key === "d") {
@@ -67,7 +85,7 @@ export default function SpriteSection() {
     };
   }, []);
 
-  // Animate movement
+  // Movement and background update
   useEffect(() => {
     let animationFrameId;
 
@@ -82,24 +100,45 @@ export default function SpriteSection() {
         if (move !== 0) {
           setIsMoving(true);
           setPosition((prev) => {
+            const containerWidth = containerRef.current?.clientWidth || 0;
             const spriteWidth = 150;
-            const maxX = Math.max(0, (containerWidth || window.innerWidth) - spriteWidth);
-            return Math.min(Math.max(0, prev + move), maxX);
+            let newPos = prev + move;
+
+            // Clamp position
+            newPos = Math.max(0, Math.min(containerWidth - spriteWidth, newPos));
+
+            // Calculate percentage scrolled
+            const percent = newPos / containerWidth;
+
+            // Determine new background index based on percentage
+            let newBg = 0;
+            if (percent > 0.8) newBg = 2;
+            else if (percent > 0.4) newBg = 1;
+
+            if (newBg !== currentBgIndex) {
+              // Set bg direction based on index difference
+              const dir = newBg > currentBgIndex ? "right" : "left";
+
+              setPrevBgIndex(currentBgIndex);
+              setCurrentBgIndex(newBg);
+              setBgDirection(dir);
+            }
+
+            return newPos;
           });
         } else {
           setIsMoving(false);
         }
       }
-
       lastTimeRef.current = time;
       animationFrameId = requestAnimationFrame(update);
     };
 
     animationFrameId = requestAnimationFrame(update);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [containerWidth]);
+  }, [currentBgIndex]);
 
-  // Animate frames while moving
+  // Walking animation frames
   useEffect(() => {
     if (!isMoving) {
       setFrameIndex(0);
@@ -113,19 +152,19 @@ export default function SpriteSection() {
     return () => clearInterval(interval);
   }, [isMoving]);
 
-  // Idle blinking logic
+  // Blinking animation (when not moving or ducking)
   useEffect(() => {
-    if (isMoving) return;
+    if (isMoving || isDucking) return;
 
     let blinkTimeout;
     let resetTimeout;
 
     const scheduleBlink = () => {
-      const delay = Math.random() * 3000 + 2000; // Between 2s–5s
+      const delay = Math.random() * 3000 + 2000;
       blinkTimeout = setTimeout(() => {
-        setFrameIndex(-1); // blink
+        setFrameIndex(-1); // blink frame
         resetTimeout = setTimeout(() => {
-          setFrameIndex(0); // standing
+          setFrameIndex(0);
           scheduleBlink();
         }, 150);
       }, delay);
@@ -137,26 +176,84 @@ export default function SpriteSection() {
       clearTimeout(blinkTimeout);
       clearTimeout(resetTimeout);
     };
-  }, [isMoving]);
+  }, [isMoving, isDucking]);
 
-  // Click to hide cursor
-  const handleClick = () => {
-    setHideCursor(true);
-    sectionRef.current?.focus();
+  // Duck logic handlers
+  const handleSpriteDown = () => {
+    isLongPressRef.current = false;
+    holdTimeoutRef.current = setTimeout(() => {
+      isLongPressRef.current = true;
+      setIsDucking(true);
+    }, 400);
   };
+
+  const handleSpriteUp = () => {
+    clearTimeout(holdTimeoutRef.current);
+    if (!isLongPressRef.current) {
+      setIsDucking(true);
+      duckTimeoutRef.current = setTimeout(() => {
+        setIsDucking(false);
+      }, 500);
+    } else {
+      setIsDucking(false);
+    }
+  };
+
+  const handleSpriteLeave = () => {
+    clearTimeout(holdTimeoutRef.current);
+    if (isLongPressRef.current) setIsDucking(false);
+  };
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      clearTimeout(duckTimeoutRef.current);
+      clearTimeout(holdTimeoutRef.current);
+    };
+  }, []);
 
   return (
     <div
-      ref={sectionRef}
+      ref={containerRef}
       tabIndex={0}
-      onClick={handleClick}
-      className={`relative h-[50vh] w-full overflow-hidden bg-cover bg-white bg-center outline-none ${
-        hideCursor ? "cursor-none" : "cursor-[url('/cursor.png'),_auto]"
-      }`}
-      style={{ backgroundImage: "url('/bg.jpg')" }}
+      className="relative h-[50vh] w-full overflow-hidden outline-none"
     >
+      {/* Static Bottom Background */}
+      <div
+        key={`bg-bottom-${prevBgIndex}`}
+        className="absolute inset-0 bg-cover bg-center"
+        style={{
+          backgroundImage: `url(${BG_IMAGES[prevBgIndex]})`,
+          zIndex: 0,
+        }}
+      />
+
+      {/* Sliding Top Background */}
+      <AnimatePresence initial={false} custom={bgDirection}>
+        {currentBgIndex !== prevBgIndex && (
+          <motion.div
+            key={`bg-top-${currentBgIndex}`}
+            className="absolute inset-0 bg-cover bg-center"
+            style={{ backgroundImage: `url(${BG_IMAGES[currentBgIndex]})`, zIndex: 1 }}
+            variants={bgVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            custom={bgDirection}
+            transition={{ duration: 0.2, ease: "easeInOut" }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Sprite */}
       <motion.img
-        src={frameIndex === -1 ? BLINK_FRAME : spriteFrames[frameIndex]}
+        src={
+          isDucking
+            ? DUCK_FRAME
+            : frameIndex === -1
+            ? BLINK_FRAME
+            : spriteFrames[frameIndex]
+        }
         alt="sprite"
         initial={false}
         animate={{
@@ -164,12 +261,17 @@ export default function SpriteSection() {
           scaleX: direction === "right" ? -1 : 1,
         }}
         transition={{
-          x: { type: "tween", ease: "linear", duration: 0.1 },
+          x: { type: "tween", ease: "linear", duration: 0 },
           scaleX: { duration: 0 },
         }}
-        className="absolute bottom-4 w-[150px] h-[150px] select-none pointer-events-none"
-        draggable={false}
+        className="absolute bottom-4 w-[150px] h-[150px] z-10 select-none pointer-events-auto"
         style={{ imageRendering: "pixelated" }}
+        draggable={false}
+        onMouseDown={handleSpriteDown}
+        onMouseUp={handleSpriteUp}
+        onMouseLeave={handleSpriteLeave}
+        onTouchStart={handleSpriteDown}
+        onTouchEnd={handleSpriteUp}
       />
     </div>
   );

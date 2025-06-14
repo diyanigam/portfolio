@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import myImage from "/assets/yay.png";
+
 export default function About() {
   return (
     <section className="flex flex-col md:flex-row-reverse items-center justify-center gap-8 px-4 py-16">

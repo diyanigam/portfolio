@@ -3,7 +3,7 @@ import DarkModeToggle from "./components/darkmode";
 import CustomCursor from "./components/cursor";
 import SpriteSection from "./components/bot";
 import Intro from "./components/intro";
-import About from "./components/About";
+import About from "./components/about";
 
 
 
